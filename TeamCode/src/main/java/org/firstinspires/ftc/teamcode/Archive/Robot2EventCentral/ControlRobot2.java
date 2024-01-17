@@ -6,7 +6,6 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import teamcode.TarantulaFICT.Hardware;
 
 @Disabled
 @TeleOp(name = "Control robot 2")

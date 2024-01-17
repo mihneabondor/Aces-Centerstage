@@ -5,7 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 @Disabled
-@TeleOp(name = "Control")
+@TeleOp(name = "-control")
 public class Control extends LinearOpMode {
 
     Hardware robot;

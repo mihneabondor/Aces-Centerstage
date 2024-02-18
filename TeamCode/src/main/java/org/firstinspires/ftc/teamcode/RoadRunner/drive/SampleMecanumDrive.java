@@ -1,5 +1,20 @@
 package org.firstinspires.ftc.teamcode.RoadRunner.drive;
 
+import static org.firstinspires.ftc.teamcode.Current.Constants.GRIPPER_DR_DESCHIS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.GRIPPER_DR_INCHIS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.GRIPPER_ST_DESCHIS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.GRIPPER_ST_INCHIS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.PENDUL_DR_JOS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.PENDUL_DR_SUS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.PENDUL_ST_JOS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.PENDUL_ST_SUS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.PIVOT_JOS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.PIVOT_SUS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.POWER_GLISIERE_CATARARE;
+import static org.firstinspires.ftc.teamcode.Current.Constants.POWER_GLISIERE_JOS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.POWER_GLISIERE_SUS;
+import static org.firstinspires.ftc.teamcode.Current.Constants.STOP_GLISIERE;
+
 import androidx.annotation.NonNull;
 
 import com.acmerobotics.dashboard.config.Config;
@@ -17,17 +32,22 @@ import com.acmerobotics.roadrunner.trajectory.constraints.MinVelocityConstraint;
 import com.acmerobotics.roadrunner.trajectory.constraints.ProfileAccelerationConstraint;
 import com.acmerobotics.roadrunner.trajectory.constraints.TrajectoryAccelerationConstraint;
 import com.acmerobotics.roadrunner.trajectory.constraints.TrajectoryVelocityConstraint;
+import com.qualcomm.hardware.dfrobot.HuskyLens;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.hardware.configuration.typecontainers.MotorConfigurationType;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.teamcode.Current.Recognition.HuskyObjTracking;
+import org.firstinspires.ftc.teamcode.Current.Recognition.Orientation;
 import org.firstinspires.ftc.teamcode.RoadRunner.drive.trajectorysequence.TrajectorySequence;
 import org.firstinspires.ftc.teamcode.RoadRunner.drive.trajectorysequence.TrajectorySequenceBuilder;
 import org.firstinspires.ftc.teamcode.RoadRunner.drive.trajectorysequence.TrajectorySequenceRunner;
@@ -58,8 +78,13 @@ public class SampleMecanumDrive extends MecanumDrive {
 
     private TrajectoryFollower follower;
 
-    private DcMotorEx leftFront, leftRear, rightRear, rightFront;
+    public DcMotorEx leftFront, leftBack, rightBack, rightFront;
+    public DcMotorEx glisieraSt, glisieraDr;
+    public Servo pendulSt, pendulDr, gripperSt, gripperDr, pivot;
     private List<DcMotorEx> motors;
+
+    public HuskyLens cam;
+    public HuskyObjTracking recognition;
 
     private IMU imu;
     private VoltageSensor batteryVoltageSensor;
@@ -67,7 +92,7 @@ public class SampleMecanumDrive extends MecanumDrive {
     private List<Integer> lastEncPositions = new ArrayList<>();
     private List<Integer> lastEncVels = new ArrayList<>();
 
-    public SampleMecanumDrive(HardwareMap hardwareMap) {
+    public SampleMecanumDrive(HardwareMap hardwareMap, Orientation orientation) {
         super(DriveConstants.kV, DriveConstants.kA, DriveConstants.kStatic, DriveConstants.TRACK_WIDTH, DriveConstants.TRACK_WIDTH, LATERAL_MULTIPLIER);
 
         follower = new HolonomicPIDVAFollower(TRANSLATIONAL_PID, TRANSLATIONAL_PID, HEADING_PID,
@@ -81,18 +106,16 @@ public class SampleMecanumDrive extends MecanumDrive {
             module.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
         }
 
-        // TODO: adjust the names of the following hardware devices to match your configuration
         imu = hardwareMap.get(IMU.class, "imu");
         IMU.Parameters parameters = new IMU.Parameters(new RevHubOrientationOnRobot(
                 DriveConstants.LOGO_FACING_DIR, DriveConstants.USB_FACING_DIR));
         imu.initialize(parameters);
 
-        leftFront = hardwareMap.get(DcMotorEx.class, "leftFront");
-        leftRear = hardwareMap.get(DcMotorEx.class, "leftRear");
-        rightRear = hardwareMap.get(DcMotorEx.class, "rightRear");
-        rightFront = hardwareMap.get(DcMotorEx.class, "rightFront");
+        setConfig(hardwareMap, orientation);
+        setDirections();
+        setFrana();
 
-        motors = Arrays.asList(leftFront, leftRear, rightRear, rightFront);
+        motors = Arrays.asList(leftFront, leftBack, rightBack, rightFront);
 
         for (DcMotorEx motor : motors) {
             MotorConfigurationType motorConfigurationType = motor.getMotorType().clone();
@@ -109,8 +132,6 @@ public class SampleMecanumDrive extends MecanumDrive {
         if (DriveConstants.RUN_USING_ENCODER && DriveConstants.MOTOR_VELO_PID != null) {
             setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, DriveConstants.MOTOR_VELO_PID);
         }
-
-        // TODO: reverse any motors using DcMotor.setDirection()
 
         List<Integer> lastTrackingEncPositions = new ArrayList<>();
         List<Integer> lastTrackingEncVels = new ArrayList<>();
@@ -271,8 +292,8 @@ public class SampleMecanumDrive extends MecanumDrive {
     @Override
     public void setMotorPowers(double v, double v1, double v2, double v3) {
         leftFront.setPower(v);
-        leftRear.setPower(v1);
-        rightRear.setPower(v2);
+        leftBack.setPower(v1);
+        rightBack.setPower(v2);
         rightFront.setPower(v3);
     }
 
@@ -295,5 +316,101 @@ public class SampleMecanumDrive extends MecanumDrive {
 
     public static TrajectoryAccelerationConstraint getAccelerationConstraint(double maxAccel) {
         return new ProfileAccelerationConstraint(maxAccel);
+    }
+
+    public void setFrana() {
+        motors = Arrays.asList(leftBack, leftFront, rightBack, rightFront);
+        for (DcMotorEx motor: motors) {
+            motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        }
+    }
+
+    public void setConfig(HardwareMap hardwareMap, Orientation orientation) {
+        glisieraDr = hardwareMap.get(DcMotorEx.class, "glisiera_dr");
+        glisieraSt = hardwareMap.get(DcMotorEx.class, "glisiera_st");
+        pivot = hardwareMap.get(Servo.class, "pivot");
+        pendulDr = hardwareMap.get(Servo.class, "pendul_dreapta");
+        pendulSt = hardwareMap.get(Servo.class, "pendul_stanga");
+        gripperSt = hardwareMap.get(Servo.class, "gripper_stanga");
+        gripperDr = hardwareMap.get(Servo.class, "gripper_dreapta");
+
+        leftFront = hardwareMap.get(DcMotorEx.class, "stanga_fata");
+        leftBack = hardwareMap.get(DcMotorEx.class, "stanga_spate");
+        rightBack = hardwareMap.get(DcMotorEx.class, "dreapta_spate");
+        rightFront = hardwareMap.get(DcMotorEx.class, "dreapta_fata");
+
+        cam = hardwareMap.get(HuskyLens.class, "camera");
+        recognition = new HuskyObjTracking(this, orientation);
+    }
+
+    public void setDefaults() {
+        lowerPendul();
+//        lowerPivot();
+    }
+    public void setDirections() {
+        glisieraDr.setDirection(DcMotorSimple.Direction.REVERSE);
+        leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
+        leftBack.setDirection(DcMotorSimple.Direction.REVERSE);
+    }
+
+    public void openLeftGripper(){
+        gripperSt.setPosition(GRIPPER_ST_DESCHIS);
+    }
+
+    public void openRightGripper(){
+        gripperDr.setPosition(GRIPPER_DR_DESCHIS);
+    }
+
+
+    public void closeGripper() {
+        gripperSt.setPosition(GRIPPER_ST_INCHIS);
+        gripperDr.setPosition(GRIPPER_DR_INCHIS);
+    }
+
+    public void openGripper() {
+        gripperDr.setPosition(GRIPPER_DR_DESCHIS);
+        gripperSt.setPosition(GRIPPER_ST_DESCHIS);
+    }
+
+    public void raisePivot() {
+        pivot.setPosition(PIVOT_SUS);
+    }
+
+    public void lowerPivot() {
+        pivot.setPosition(PIVOT_JOS);
+    }
+
+    public void ascendGlisiere() {
+        glisieraSt.setPower(POWER_GLISIERE_SUS);
+        glisieraDr.setPower(POWER_GLISIERE_SUS);
+
+    }
+
+    public void franaGlisiere(){
+        glisieraSt.setPower(STOP_GLISIERE);
+        glisieraDr.setPower(STOP_GLISIERE);
+    }
+
+    public void descendGlisiere() {
+        glisieraSt.setPower(POWER_GLISIERE_JOS);
+        glisieraDr.setPower(POWER_GLISIERE_JOS);
+    }
+
+    public void stopGlisiere(boolean catarare) {
+        double power = catarare ? POWER_GLISIERE_CATARARE : STOP_GLISIERE;
+        glisieraDr.setPower(power);
+        glisieraSt.setPower(power);
+    }
+
+    public void raisePendul() {
+        pendulSt.setPosition(PENDUL_ST_SUS);
+        pendulDr.setPosition(PENDUL_DR_SUS);
+        raisePivot();
+    }
+
+    public void lowerPendul() {
+        pendulSt.setPosition(PENDUL_ST_JOS);
+        pendulDr.setPosition(PENDUL_DR_JOS);
+        lowerPivot();
     }
 }

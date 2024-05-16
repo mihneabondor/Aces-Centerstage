@@ -1,17 +1,21 @@
 package org.firstinspires.ftc.teamcode.Current.Recognition;
 
 import com.qualcomm.hardware.dfrobot.HuskyLens;
-import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import org.firstinspires.ftc.teamcode.Current.Hardware;
+import org.firstinspires.ftc.teamcode.Archive.MeetAlbaBeclean.Auto.Hardware;
+import org.firstinspires.ftc.teamcode.RoadRunner.drive.SampleMecanumDrive;
 
 public class HuskyObjTracking {
-    Hardware robot;
+    SampleMecanumDrive robot;
+    Orientation orientation;
     //TODO: aici
     private final short[] casex = {70, 150, 230};
 
-    public HuskyObjTracking(Hardware robot) {
+    public HuskyObjTracking(SampleMecanumDrive robot, Orientation orientation) {
         this.robot = robot;
+        this.orientation = orientation;
+        if(orientation == Orientation.LEFT) casex[0] = 5000;
+        else casex[2] = 5000;
     }
 
     public Caz getCaz(int id) {
@@ -30,6 +34,8 @@ public class HuskyObjTracking {
                 return Caz.fromIndex(index);
             }
         }
-        return Caz.MID;
+        if(orientation == Orientation.LEFT)
+            return Caz.LEFT;
+        return Caz.RIGHT;
     }
 }
